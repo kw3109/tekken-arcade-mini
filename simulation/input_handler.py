@@ -11,10 +11,10 @@
 # Controls
 # --------
 # Player 1:  A / D      move     W    jump    S    crouch
-#            J          light    K    heavy   L    block
+#            J          light    K    kick (heavy)   L    block
 #
 # Player 2:  ← / →      move     ↑    jump    ↓    crouch
-#            ,           light    .    heavy   /    block
+#            ,           light    .    kick (heavy)   /    block
 # =============================================================================
 
 import pygame

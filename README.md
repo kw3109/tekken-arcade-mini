@@ -9,14 +9,18 @@ A two-player arcade fighting game — built first as a Python/Pygame desktop pro
 ```
 tekken-arcade-mini/
 ├── simulation/          # Python/Pygame desktop prototype
-│   ├── main.py          # Game loop, state machine, hit detection
-│   ├── player.py        # Player class: physics, attacks, health
-│   ├── constants.py     # All tunable gameplay values
-│   ├── input_handler.py # Keyboard → actions mapping
-│   ├── renderer.py      # All drawing/UI code
+│   ├── main.py            # Game loop, state machine, hit detection
+│   ├── player.py          # Player class: physics, attacks, health
+│   ├── character_data.py  # Roster + `CharacterProfile`
+│   ├── character_select.py# Roster key handling
+│   ├── combat.py          # Hit resolution
+│   ├── assets_loader.py   # Sprite PNG loading
+│   ├── constants.py       # All tunable gameplay values
+│   ├── input_handler.py   # Keyboard → actions mapping
+│   ├── renderer.py        # All drawing/UI code
 │   └── requirements.txt
 ├── arduino/             # Arduino firmware (future)
-├── assets/              # Sprites, sounds, fonts (future)
+├── assets/fighters/     # Per-fighter PNGs (`greb`, `splint`, `citron`, `brick`)
 └── docs/                # Design notes and wiring diagrams (future)
 ```
 
@@ -43,14 +47,18 @@ python3 main.py
 | Jump | `W` | `↑` |
 | Crouch | `S` | `↓` |
 | Light attack | `J` | `,` |
-| Heavy attack | `K` | `.` |
+| Kick (heavy) | `K` | `.` |
 | Block | `L` | `/` |
 | Pause / Quit | `ESC` | `ESC` |
-| Start / Restart | `Enter` | |
+| Start (title) | `Enter` | |
+| Character select | P1: `A`/`D` cycle, `J`/`Space` lock — P2: arrows, `,` lock — both locked then `Enter` to fight | |
+| After match | `Enter` returns to title | |
 
 ### Game states
 
-`MENU` → `COUNTDOWN` → `PLAYING` → `ROUND_END` → `GAME_OVER`
+`MENU` → `CHAR_SELECT` → `COUNTDOWN` → `PLAYING` → `ROUND_END` → `GAME_OVER` → (`Enter` → `MENU`)
+
+Regenerate placeholder sprites from the repo root: `python3 assets/generate_placeholder_sprites.py`
 
 First player to win **2 rounds** wins the match.
 
@@ -69,6 +77,8 @@ First player to win **2 rounds** wins the match.
 
 All values live in `simulation/constants.py` and are easy to tweak.
 
+The match **stage** draws a twilight sky, neoclassical **library facade** (columns + warm glowing windows), plaza ground, and street lamps—colors tuned for a night-campus mood. Fighter sprites are generated as **humanoid** placeholders (skin, shirt, arms, legs, shoes); run `python3 assets/generate_placeholder_sprites.py` after editing the script.
+
 ### Architecture
 
 The code is intentionally separated so the core logic can be ported to Arduino:
@@ -76,6 +86,8 @@ The code is intentionally separated so the core logic can be ported to Arduino:
 | File | Responsibility |
 |---|---|
 | `constants.py` | Tunable numbers and colors only — maps to `#define` / `const` on Arduino |
+| `character_data.py` | Roster + per-fighter stats |
+| `combat.py` | Hit overlap and damage resolution |
 | `player.py` | Fighter state machine and physics — maps to a C `struct` + update functions |
 | `input_handler.py` | Keyboard → action dict — maps to `digitalRead()` GPIO reads |
 | `renderer.py` | All drawing — maps to TFT library calls (`fillRect`, `drawString`, etc.) |
