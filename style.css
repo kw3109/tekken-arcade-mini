@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@500;700;800&display=swap');
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -31,8 +31,8 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--bg);
-  font-family: 'Share Tech Mono', monospace;
+  background: #0a0a0f;
+  font-family: 'Press Start 2P', monospace;
   color: var(--white);
   -webkit-tap-highlight-color: transparent;
   user-select: none;
@@ -77,7 +77,7 @@ html, body {
 }
 
 .hp-label {
-  font-family: 'Black Han Sans', sans-serif;
+  font-family: 'Press Start 2P', monospace;
   font-size: 11px;
   letter-spacing: 2px;
 }
@@ -112,7 +112,7 @@ html, body {
 }
 
 #round-label {
-  font-family: 'Black Han Sans', sans-serif;
+  font-family: 'Press Start 2P', monospace;
   font-size: 12px;
   color: var(--yellow);
   letter-spacing: 3px;
@@ -151,6 +151,13 @@ html, body {
   width: 100%;
   height: 100%;
   display: block;
+  border-radius: 8px;
+  border: 2px solid #ff6b00;
+  box-shadow:
+    0 0 0 1px #ff6b0044,
+    0 0 30px #ff6b0033,
+    0 0 60px #ff6b0011;
+  animation: crtOn 0.4s ease-out;
 }
 
 /* ===================== OVERLAY SCREENS ===================== */
@@ -161,18 +168,20 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(5, 10, 20, 0.92);
+  background: rgba(10, 10, 15, 0.88);
   z-index: 10;
   gap: 16px;
 }
 #overlay.hidden { display: none; }
 
 .overlay-title {
-  font-family: 'Black Han Sans', sans-serif;
+  font-family: 'Press Start 2P', monospace;
   font-size: clamp(36px, 8vw, 72px);
   letter-spacing: 6px;
-  color: var(--yellow);
-  text-shadow: 0 0 30px rgba(255, 224, 0, 0.6), 4px 4px 0 #000;
+  color: #ff6b00;
+  text-align: center;
+  width: 100%;
+  text-shadow: 0 0 28px rgba(255, 107, 0, 0.5), 4px 4px 0 #000;
   animation: pulse 1.4s ease-in-out infinite;
 }
 
@@ -182,22 +191,22 @@ html, body {
 }
 
 .overlay-sub {
-  font-size: clamp(12px, 2.5vw, 18px);
-  color: #aabbcc;
-  letter-spacing: 2px;
+  font-size: clamp(10px, 2vw, 14px);
+  color: #666688;
+  letter-spacing: 1px;
   text-align: center;
   line-height: 1.8;
 }
 
 .overlay-winner {
-  font-family: 'Black Han Sans', sans-serif;
+  font-family: 'Press Start 2P', monospace;
   font-size: clamp(22px, 5vw, 42px);
   letter-spacing: 4px;
   text-shadow: 2px 2px 0 #000;
 }
 
 .overlay-ko {
-  font-family: 'Black Han Sans', sans-serif;
+  font-family: 'Press Start 2P', monospace;
   font-size: clamp(48px, 12vw, 96px);
   color: var(--p2);
   letter-spacing: 12px;
@@ -212,23 +221,23 @@ html, body {
 
 .btn-start {
   margin-top: 8px;
-  padding: 14px 40px;
-  font-family: 'Black Han Sans', sans-serif;
-  font-size: 18px;
-  letter-spacing: 4px;
-  color: var(--bg);
-  background: var(--yellow);
-  border: none;
+  padding: 14px 28px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: #111;
+  background: #ff6b00;
+  border: 1px solid #ff9a44;
   border-radius: 4px;
   cursor: pointer;
   touch-action: none;
-  box-shadow: 0 4px 0 #886600, 0 0 20px rgba(255, 224, 0, 0.3);
+  box-shadow: 0 4px 0 #8a3c00, 0 0 20px rgba(255, 107, 0, 0.3);
   transition: transform 0.1s, box-shadow 0.1s;
   -webkit-tap-highlight-color: transparent;
 }
 .btn-start:active {
   transform: translateY(3px);
-  box-shadow: 0 1px 0 #886600;
+  box-shadow: 0 1px 0 #8a3c00;
 }
 
 .controls-legend {
@@ -249,7 +258,7 @@ html, body {
 }
 
 .legend-name {
-  font-family: 'Black Han Sans', sans-serif;
+  font-family: 'Press Start 2P', monospace;
   font-size: 14px;
   letter-spacing: 3px;
 }
@@ -269,9 +278,11 @@ html, body {
 }
 
 #countdown-text {
-  font-family: 'Black Han Sans', sans-serif;
+  font-family: 'Press Start 2P', monospace;
   font-size: clamp(60px, 18vw, 140px);
   color: var(--white);
+  text-align: center;
+  width: 100%;
   text-shadow: 4px 4px 0 #000, 0 0 40px rgba(255, 255, 255, 0.3);
   display: none;
   animation: cd-pop 0.25s cubic-bezier(0.2, 0.8, 0.3, 1.2);
@@ -353,7 +364,7 @@ html, body {
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  font-family: 'Black Han Sans', sans-serif;
+  font-family: 'Press Start 2P', monospace;
   font-size: 10px;
   letter-spacing: 1px;
   cursor: pointer;
@@ -375,6 +386,7 @@ html, body {
 .btn-light { background: radial-gradient(circle at 35% 35%, #3388ff, #0044cc); }
 .btn-heavy { background: radial-gradient(circle at 35% 35%, #ff6600, #cc2200); }
 .btn-block { background: radial-gradient(circle at 35% 35%, #446655, #223344); width: 52px; height: 52px; }
+.btn-block span:not(.icon) { font-size: 8px; }
 
 /* P2 mirror layout */
 .p2-controls .dpad { direction: rtl; }
@@ -382,7 +394,7 @@ html, body {
 
 /* Player labels on controls */
 .ctrl-label {
-  font-family: 'Black Han Sans', sans-serif;
+  font-family: 'Press Start 2P', monospace;
   font-size: 11px;
   letter-spacing: 3px;
   text-align: center;
@@ -410,11 +422,17 @@ html, body {
   inset: 0;
   pointer-events: none;
   background: repeating-linear-gradient(
-    to bottom,
+    0deg,
     transparent 0px,
     transparent 2px,
     rgba(0, 0, 0, 0.07) 2px,
     rgba(0, 0, 0, 0.07) 4px
   );
   z-index: 100;
+}
+
+@keyframes crtOn {
+  0% { transform: scaleY(0.01) scaleX(1); opacity: 0.5; }
+  50% { transform: scaleY(0.03) scaleX(1); opacity: 1; }
+  100% { transform: scaleY(1) scaleX(1); opacity: 1; }
 }
