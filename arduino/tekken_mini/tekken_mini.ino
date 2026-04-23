@@ -62,6 +62,18 @@
 #define PIN_LED    4
 #define PIN_AUDIO  5   // ← moved from 13 to avoid conflict with P2_BTN_LIGHT
 
+// Optional: stream compact JSON frames to an ESP32 WiFi display bridge over UART1.
+// Wire: RP2040 GPIO TX → ESP32 RX, RP2040 GPIO RX ← ESP32 TX (optional), GND common.
+// Metro RP2040: use two free GPIOs (defaults below). Set WIFI_DISPLAY_ENABLE to 0 if unused.
+#ifndef WIFI_DISPLAY_ENABLE
+#define WIFI_DISPLAY_ENABLE 0
+#endif
+#if WIFI_DISPLAY_ENABLE
+#define PIN_SERIAL1_TX  16u
+#define PIN_SERIAL1_RX  17u
+#define WIFI_FRAME_MS   80u
+#endif
+
 // ============================================================================
 // SCREEN — ST7735R in landscape via setRotation(1): 160 wide × 128 tall
 // ============================================================================
@@ -918,10 +930,71 @@ void update_game_over(const InputState* i1) {
 }
 
 // ============================================================================
+// WiFi display bridge — JSON lines on Serial1 for ESP32 → WebSocket clients
+// ============================================================================
+#if WIFI_DISPLAY_ENABLE
+static uint32_t s_wifi_next_ms = 0;
+
+static void wifi_display_send_frame() {
+    uint32_t now = millis();
+    if (now < s_wifi_next_ms) return;
+    s_wifi_next_ms = now + WIFI_FRAME_MS;
+
+    if (game_state == STATE_MENU) {
+        Serial1.println(F("{\"t\":\"frame\",\"st\":0}"));
+        return;
+    }
+
+    int h1 = (p1.action == ACT_CROUCHING) ? PLAYER_CROUCH_H : PLAYER_H;
+    int h2 = (p2.action == ACT_CROUCHING) ? PLAYER_CROUCH_H : PLAYER_H;
+
+    Serial1.print(F("{\"t\":\"frame\",\"st\":"));
+    Serial1.print((int)game_state);
+    Serial1.print(F(",\"rn\":"));
+    Serial1.print(round_num);
+    Serial1.print(F(",\"w1\":"));
+    Serial1.print(p1.round_wins);
+    Serial1.print(F(",\"w2\":"));
+    Serial1.print(p2.round_wins);
+    Serial1.print(F(",\"p1\":{\"x\":"));
+    Serial1.print((int)p1.x);
+    Serial1.print(F(",\"y\":"));
+    Serial1.print((int)p1.y);
+    Serial1.print(F(",\"hp\":"));
+    Serial1.print(p1.health);
+    Serial1.print(F(",\"a\":"));
+    Serial1.print((int)p1.action);
+    Serial1.print(F(",\"ko\":"));
+    Serial1.print(p1.is_ko ? 1 : 0);
+    Serial1.print(F(",\"h\":"));
+    Serial1.print(h1);
+    Serial1.print(F("},\"p2\":{\"x\":"));
+    Serial1.print((int)p2.x);
+    Serial1.print(F(",\"y\":"));
+    Serial1.print((int)p2.y);
+    Serial1.print(F(",\"hp\":"));
+    Serial1.print(p2.health);
+    Serial1.print(F(",\"a\":"));
+    Serial1.print((int)p2.action);
+    Serial1.print(F(",\"ko\":"));
+    Serial1.print(p2.is_ko ? 1 : 0);
+    Serial1.print(F(",\"h\":"));
+    Serial1.print(h2);
+    Serial1.println(F("}}"));
+}
+#endif
+
+// ============================================================================
 // SETUP
 // ============================================================================
 void setup() {
     Serial.begin(115200);
+
+#if WIFI_DISPLAY_ENABLE
+    Serial1.setTX(PIN_SERIAL1_TX);
+    Serial1.setRX(PIN_SERIAL1_RX);
+    Serial1.begin(115200);
+#endif
 
     // --- Input pin modes ---
     pinMode(P1_JOY_SEL,  INPUT_PULLUP);
@@ -966,6 +1039,10 @@ void loop() {
         case STATE_ROUND_END:  update_round_end();        break;
         case STATE_GAME_OVER:  update_game_over(&i1);    break;
     }
+
+#if WIFI_DISPLAY_ENABLE
+    wifi_display_send_frame();
+#endif
 
     // Small yield — RP2040 core 0 yields to core 1 / USB stack
     delay(1);

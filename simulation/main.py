@@ -150,10 +150,16 @@ class Game:
         self.snd_light_hit = load_sound("normalpunch.wav")
         self.snd_heavy_hit = load_sound("hardpunch.wav")
         self.snd_block     = load_sound("blockingpunch.wav")
-        # Short sting when a round ends in KO (not the full match VO)
-        self.snd_ko        = load_sound("hardpunch.wav")
-        if self.snd_ko:
-            self.snd_ko.set_volume(0.35)
+        # Round KO in _handle_ko(): knockout SFX, optional ko.wav, else hardpunch
+        self.snd_ko = load_sound("knockout-game-sound-effects.wav")
+        if not self.snd_ko:
+            self.snd_ko = load_sound("ko.wav")
+        if not self.snd_ko:
+            self.snd_ko = load_sound("hardpunch.wav")
+            if self.snd_ko:
+                self.snd_ko.set_volume(0.85)
+        else:
+            self.snd_ko.set_volume(1.0)
         self.snd_fight_r1  = load_sound("Voicy_Round 1 fight.wav")
         self.snd_fight_r2  = load_sound("Voicy_Round 2 fight.wav")
         self.snd_fight_final = load_sound("Voicy_Final round Round fight.wav")

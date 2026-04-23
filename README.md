@@ -137,6 +137,21 @@ Full port of the simulation to the Adafruit Metro RP2040 with a 1.8" ST7735R TFT
 3. Select **Adafruit Metro RP2040**
 4. Open `arduino/tekken_mini/tekken_mini.ino` and upload
 
+### WiFi display (optional second screen)
+
+Stream live match state from the **Metro RP2040** to phones/tablets via an **ESP32** WiFi bridge.
+
+| Piece | Path / notes |
+|-------|----------------|
+| RP2040 telemetry | [`arduino/tekken_mini/tekken_mini.ino`](arduino/tekken_mini/tekken_mini.ino) — set `WIFI_DISPLAY_ENABLE` to `1`, confirm `PIN_SERIAL1_TX` / `PIN_SERIAL1_RX` match free GPIOs on your board |
+| ESP32 bridge | [`arduino/esp32_wifi_display/esp32_wifi_display.ino`](arduino/esp32_wifi_display/esp32_wifi_display.ino) — install **WebSockets** library; default **AP** SSID `TekkenMini` / password `tekken123` |
+
+**Wiring:** RP2040 `TX` → ESP32 `RX` (e.g. GPIO16), RP2040 `RX` ← ESP32 `TX` (e.g. GPIO17) if you use bidirectional UART later, **GND** common, **3.3 V only**.
+
+**Phone:** Join `TekkenMini` WiFi, open `http://192.168.4.1/` — canvas updates from WebSocket JSON frames (`~12/s` from the game).
+
+To use your home router instead of AP, set `WIFI_USE_STA` to `1` in the ESP32 sketch and fill `STA_SSID` / `STA_PASSWORD`.
+
 ### Python → Arduino mapping
 
 | Python / Pygame | Arduino sketch |
