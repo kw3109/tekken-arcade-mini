@@ -15,6 +15,7 @@
 #   GAME_OVER     Match winner shown; Enter → title menu.
 # =============================================================================
 
+import os
 import random
 import sys
 
@@ -118,6 +119,52 @@ class Game:
         self.snd_block     = None
         self.snd_ko        = None
         self.snd_fight     = None
+        self.snd_fight_r1  = None
+        self.snd_fight_r2  = None
+        self.snd_fight_final = None
+        self.snd_game_over = None
+        self.snd_jump = None
+        self.snd_land = None
+
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init()
+            pygame.mixer.set_num_channels(16)
+        except pygame.error:
+            return
+
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        snd_dir = os.path.join(repo_root, "assets", "sounds")
+
+        def load_sound(filename):
+            for base in (snd_dir, repo_root):
+                path = os.path.join(base, filename)
+                if not os.path.isfile(path):
+                    continue
+                try:
+                    return pygame.mixer.Sound(path)
+                except (pygame.error, FileNotFoundError, OSError):
+                    continue
+            return None
+
+        self.snd_light_hit = load_sound("normalpunch.wav")
+        self.snd_heavy_hit = load_sound("hardpunch.wav")
+        self.snd_block     = load_sound("blockingpunch.wav")
+        # Short sting when a round ends in KO (not the full match VO)
+        self.snd_ko        = load_sound("hardpunch.wav")
+        if self.snd_ko:
+            self.snd_ko.set_volume(0.35)
+        self.snd_fight_r1  = load_sound("Voicy_Round 1 fight.wav")
+        self.snd_fight_r2  = load_sound("Voicy_Round 2 fight.wav")
+        self.snd_fight_final = load_sound("Voicy_Final round Round fight.wav")
+        self.snd_game_over = load_sound("Voicy_Game Over.wav")
+        self.snd_fight     = self.snd_fight_r1
+        self.snd_jump      = load_sound("jump.wav")
+        self.snd_land      = load_sound("jumplanding.wav")
+        if self.snd_jump:
+            self.snd_jump.set_volume(0.55)
+        if self.snd_land:
+            self.snd_land.set_volume(0.55)
 
     def _play(self, snd):
         if snd:
@@ -225,6 +272,7 @@ class Game:
         sys.exit()
 
     def _update(self, dt):
+        prev_state = self.state
         if self.paused:
             return
 
@@ -259,6 +307,9 @@ class Game:
 
         self._update_shake(dt)
 
+        if self.state == STATE_GAME_OVER and prev_state != STATE_GAME_OVER:
+            self._play(self.snd_game_over)
+
     def _update_shake(self, dt):
         if self.shake_magnitude <= 0.1:
             self.shake_magnitude = 0.0
@@ -275,6 +326,12 @@ class Game:
         self.countdown.update(dt)
         if self.countdown.done:
             self.state = STATE_PLAYING
+            if self.round_num <= 1:
+                self.snd_fight = self.snd_fight_r1 or self.snd_fight
+            elif self.round_num == 2:
+                self.snd_fight = self.snd_fight_r2 or self.snd_fight_r1 or self.snd_fight
+            else:
+                self.snd_fight = self.snd_fight_final or self.snd_fight_r2 or self.snd_fight_r1 or self.snd_fight
             self._play(self.snd_fight)
 
     def _update_playing(self, dt):
@@ -284,8 +341,29 @@ class Game:
 
         keys = pygame.key.get_pressed()
 
+        p1_og = self.p1.on_ground
+        p2_og = self.p2.on_ground
         self.p1.update(dt, get_p1_actions(keys), self.p2)
         self.p2.update(dt, get_p2_actions(keys), self.p1)
+
+        if self.p1.on_ground and not p1_og:
+            self._play(self.snd_land)
+        elif (
+            not self.p1.on_ground
+            and p1_og
+            and self.p1.vel_y < -120
+            and not self.p1.is_ko
+        ):
+            self._play(self.snd_jump)
+        if self.p2.on_ground and not p2_og:
+            self._play(self.snd_land)
+        elif (
+            not self.p2.on_ground
+            and p2_og
+            and self.p2.vel_y < -120
+            and not self.p2.is_ko
+        ):
+            self._play(self.snd_jump)
 
         self._resolve_hit(self.p1, self.p2)
         self._resolve_hit(self.p2, self.p1)
