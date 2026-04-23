@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>TEKKEN MINI</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="scanlines"></div>
+<div id="root">
+  <div id="game-wrapper">
+
+    <!-- HUD -->
+    <div id="hud">
+      <div class="hp-container">
+        <div class="hp-label p1">P1</div>
+        <div class="hp-bar-outer">
+          <div class="hp-bar-inner" id="p1-hp-bar" style="width:100%"></div>
+        </div>
+      </div>
+
+      <div class="center-hud">
+        <div id="round-label">RND 1</div>
+        <div style="display:flex;gap:16px">
+          <div class="win-pips" id="p1-pips">
+            <div class="pip" id="p1-pip-0"></div>
+            <div class="pip" id="p1-pip-1"></div>
+          </div>
+          <div class="win-pips" id="p2-pips">
+            <div class="pip" id="p2-pip-0"></div>
+            <div class="pip" id="p2-pip-1"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hp-container">
+        <div class="hp-label p2" style="text-align:right">P2</div>
+        <div class="hp-bar-outer">
+          <div style="display:flex;justify-content:flex-end;height:100%">
+            <div class="hp-bar-inner" id="p2-hp-bar" style="width:100%;background:var(--hp-ok)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CANVAS -->
+    <div id="canvas-area">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- Main overlay (menu / game over / round end) -->
+      <div id="overlay">
+        <div class="overlay-title" id="overlay-title">TEKKEN MINI</div>
+        <div class="overlay-sub" id="overlay-sub">2-PLAYER ARCADE FIGHTER</div>
+        <div class="controls-legend">
+          <div class="legend-player">
+            <div class="legend-name p1">P1</div>
+            <div>D-PAD: Move / Jump / Crouch</div>
+            <div>🔵 Light Attack</div>
+            <div>🔴 Heavy Attack</div>
+            <div>🛡 Block</div>
+          </div>
+          <div class="legend-player">
+            <div class="legend-name p2">P2</div>
+            <div>D-PAD: Move / Jump / Crouch</div>
+            <div>🔵 Light Attack</div>
+            <div>🔴 Heavy Attack</div>
+            <div>🛡 Block</div>
+          </div>
+        </div>
+        <button class="btn-start" id="overlay-btn" ontouchstart="overlayBtnPressed()" onclick="overlayBtnPressed()">
+          ▶ START GAME
+        </button>
+      </div>
+
+      <!-- Countdown -->
+      <div id="countdown-overlay">
+        <div id="countdown-text"></div>
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div id="controls">
+
+      <!-- P1 Controls (left) -->
+      <div class="player-ctrl">
+        <div class="ctrl-label p1">PLAYER 1</div>
+        <div class="ctrl-inner">
+          <!-- D-pad -->
+          <div class="dpad" id="p1-dpad">
+            <div class="dpad-btn dpad-up" ontouchstart="dpadPress(event,'1','up')" ontouchend="dpadRelease(event,'1','up')">▲</div>
+            <div class="dpad-btn dpad-left" ontouchstart="dpadPress(event,'1','left')" ontouchend="dpadRelease(event,'1','left')">◀</div>
+            <div class="dpad-center"></div>
+            <div class="dpad-btn dpad-right" ontouchstart="dpadPress(event,'1','right')" ontouchend="dpadRelease(event,'1','right')">▶</div>
+            <div class="dpad-btn dpad-down" ontouchstart="dpadPress(event,'1','down')" ontouchend="dpadRelease(event,'1','down')">▼</div>
+          </div>
+          <!-- Attack buttons -->
+          <div class="attack-group">
+            <div class="atk-row">
+              <button class="atk-btn btn-light" ontouchstart="atkPress(event,'1','light')" ontouchend="atkRelease(event,'1','light')">
+                <span class="icon">👊</span><span>LIGHT</span>
+              </button>
+              <button class="atk-btn btn-heavy" ontouchstart="atkPress(event,'1','heavy')" ontouchend="atkRelease(event,'1','heavy')">
+                <span class="icon">💥</span><span>HEAVY</span>
+              </button>
+            </div>
+            <button class="atk-btn btn-block" ontouchstart="atkPress(event,'1','block')" ontouchend="atkRelease(event,'1','block')">
+              <span class="icon">🛡</span><span>BLOCK</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- P2 Controls (right, mirrored) -->
+      <div class="player-ctrl p2-controls">
+        <div class="ctrl-label p2">PLAYER 2</div>
+        <div class="ctrl-inner">
+          <!-- Attack buttons -->
+          <div class="attack-group">
+            <div class="atk-row">
+              <button class="atk-btn btn-light" ontouchstart="atkPress(event,'2','light')" ontouchend="atkRelease(event,'2','light')">
+                <span class="icon">👊</span><span>LIGHT</span>
+              </button>
+              <button class="atk-btn btn-heavy" ontouchstart="atkPress(event,'2','heavy')" ontouchend="atkRelease(event,'2','heavy')">
+                <span class="icon">💥</span><span>HEAVY</span>
+              </button>
+            </div>
+            <button class="atk-btn btn-block" ontouchstart="atkPress(event,'2','block')" ontouchend="atkRelease(event,'2','block')">
+              <span class="icon">🛡</span><span>BLOCK</span>
+            </button>
+          </div>
+          <!-- D-pad -->
+          <div class="dpad" id="p2-dpad">
+            <div class="dpad-btn dpad-up" ontouchstart="dpadPress(event,'2','up')" ontouchend="dpadRelease(event,'2','up')">▲</div>
+            <div class="dpad-btn dpad-right" ontouchstart="dpadPress(event,'2','right')" ontouchend="dpadRelease(event,'2','right')">▶</div>
+            <div class="dpad-center"></div>
+            <div class="dpad-btn dpad-left" ontouchstart="dpadPress(event,'2','left')" ontouchend="dpadRelease(event,'2','left')">◀</div>
+            <div class="dpad-btn dpad-down" ontouchstart="dpadPress(event,'2','down')" ontouchend="dpadRelease(event,'2','down')">▼</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
