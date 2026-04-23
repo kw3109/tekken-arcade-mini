@@ -13,17 +13,18 @@ const JUMP_VEL         = -520;   // px/sec upward
 const GRAVITY          = 1300;   // px/sec²
 const KNOCKBACK_SPD    = 160;    // px/sec horizontal on hit
 
-const PLAYER_W         = 28;
-const PLAYER_H         = 56;
-const PLAYER_CROUCH_H  = 34;
+const SPRITE_SCALE      = 2;     // single knob for fighter/body size
+const PLAYER_W          = Math.round(28 * SPRITE_SCALE);
+const PLAYER_H          = Math.round(56 * SPRITE_SCALE);
+const PLAYER_CROUCH_H   = Math.round(34 * SPRITE_SCALE);
 
 const LIGHT_DMG        = 8;
-const LIGHT_RANGE      = 56;
+const LIGHT_RANGE      = Math.round(56 * SPRITE_SCALE);
 const LIGHT_CD_MS      = 400;
 const LIGHT_ACTIVE_MS  = 120;
 
 const HEAVY_DMG        = 22;
-const HEAVY_RANGE      = 80;
+const HEAVY_RANGE      = Math.round(80 * SPRITE_SCALE);
 const HEAVY_CD_MS      = 1050;
 const HEAVY_WINDUP_MS  = 160;
 const HEAVY_ACTIVE_MS  = 200;
@@ -51,12 +52,28 @@ const C_YELLOW   = '#ffe000';
 const C_RED      = '#ff2222';
 const C_GREEN    = '#00ee44';
 
+const CHARACTERS = [
+  { name: 'BRICK',  portrait: 'WALL BREAKER', color: '#2266ff', atkColor: '#66aaff', spriteId: 'brick' },
+  { name: 'CITRON', portrait: 'FLASH SLICE',  color: '#ff2f2f', atkColor: '#ff8888', spriteId: 'citron' },
+  { name: 'GREB',   portrait: 'DARK RUSH',    color: '#2ecf53', atkColor: '#84ee9d', spriteId: 'greb' },
+  { name: 'SPLINT', portrait: 'QUICK JACKAL', color: '#ffcf2f', atkColor: '#ffe98a', spriteId: 'splint' },
+];
+const spriteCache = {};
+
 // ============================================================================
 // GAME STATE ENUM
 // ============================================================================
 const STATE = { MENU: 0, COUNTDOWN: 1, PLAYING: 2, ROUND_END: 3, GAME_OVER: 4 };
 
 let gameState = STATE.MENU;
+let menuPhase = 'title'; // title | character_select
+let menuReadyAt = 0;
+const menuSel = { 1: 0, 2: 1 };
+const menuLock = { 1: false, 2: false };
+const menuPrev = {
+  1: { left: false, right: false, light: false, heavy: false, block: false },
+  2: { left: false, right: false, light: false, heavy: false, block: false },
+};
 let roundNum  = 1;
 let p1, p2;
 let hitstopEnd = 0;
@@ -67,6 +84,7 @@ let cdStep  = 0;
 let cdNext  = 0;
 let animId  = null;
 let frameCount = 0;
+let startInputPrev = false;
 
 // Canvas & layout (set by resizeCanvas)
 const canvas = document.getElementById('game-canvas');
@@ -93,6 +111,13 @@ const keyMap = {
 document.addEventListener('keydown', e => {
   const m = keyMap[e.key];
   if (m) { const [pl, a] = m.split('-'); inp[pl][a] = true; e.preventDefault(); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.repeat) return;
+  if ((gameState === STATE.MENU && menuPhase === 'title') || gameState === STATE.GAME_OVER) {
+    overlayBtnPressed();
+    e.preventDefault();
+  }
 });
 document.addEventListener('keyup', e => {
   const m = keyMap[e.key];
@@ -138,6 +163,39 @@ function resetPlayerForRound(p, x, y, facingRight) {
   p.flashEnd = 0;
 }
 
+function applyMenuCharacters() {
+  const c1 = CHARACTERS[menuSel[1]];
+  const c2 = CHARACTERS[menuSel[2]];
+  p1.color = c1.color;
+  p1.atkColor = c1.atkColor;
+  p1.charId = c1.spriteId;
+  p2.color = c2.color;
+  p2.atkColor = c2.atkColor;
+  p2.charId = c2.spriteId;
+}
+
+function getSpriteImage(charId, spriteName) {
+  if (!charId) return null;
+  const key = `${charId}/${spriteName}`;
+  if (!spriteCache[key]) {
+    const img = new Image();
+    img.src = `assets/fighters/${charId}/${spriteName}.png`;
+    spriteCache[key] = img;
+  }
+  return spriteCache[key];
+}
+
+function getPlayerSpriteName(p) {
+  if (p.action === 'light') return 'light';
+  if (p.action === 'heavy') return 'heavy';
+  if (p.action === 'block') return 'block';
+  if (p.action === 'crouch') return 'crouch';
+  if (p.action === 'jump') return 'jump';
+  if (p.action === 'ko') return 'ko';
+  if (p.action === 'walk') return (Math.floor(frameCount / 8) % 2 === 0) ? 'walk_0' : 'walk_1';
+  return 'idle';
+}
+
 // ============================================================================
 // GEOMETRY — axis-aligned bounding boxes
 // ============================================================================
@@ -149,7 +207,11 @@ function playerRect(p) {
 
 function attackRect(p) {
   if (!p.attackActive) return null;
-  const reach = p.currentAtk === 1 ? LIGHT_RANGE : HEAVY_RANGE;
+  let reach = p.currentAtk === 1 ? LIGHT_RANGE : HEAVY_RANGE;
+  // Align left-side (Player 2 side) heavy gameplay range with perceived UI range.
+  if (p.currentAtk === 2 && !p.facingRight) {
+    reach = Math.floor(reach * 0.82);
+  }
   const ax = p.facingRight ? p.x + PLAYER_W : p.x - reach;
   return { x: ax, y: p.y + 10, w: reach, h: PLAYER_H - 20 };
 }
@@ -388,9 +450,161 @@ function drawBackground() {
   }
 }
 
+function drawStartScreenBackground() {
+  const t = performance.now() * 0.001;
+  const grad = ctx.createLinearGradient(0, 0, 0, CH);
+  grad.addColorStop(0, '#040812');
+  grad.addColorStop(0.55, '#09162b');
+  grad.addColorStop(1, '#060a14');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, CW, CH);
+
+  // Neon skyline bars
+  for (let i = 0; i < 18; i++) {
+    const w = 18 + (i % 4) * 8;
+    const h = 40 + ((i * 37) % 130);
+    const x = (i * 57 + Math.sin(t + i) * 6) % (CW + 60) - 30;
+    const y = FLOOR_Y - h;
+    ctx.fillStyle = `rgba(70,180,255,${0.07 + (i % 3) * 0.03})`;
+    ctx.fillRect(x, y, w, h);
+  }
+
+  // Horizon glow
+  const horizon = ctx.createLinearGradient(0, FLOOR_Y - 40, 0, FLOOR_Y + 35);
+  horizon.addColorStop(0, 'rgba(80,160,255,0)');
+  horizon.addColorStop(0.5, 'rgba(80,160,255,0.22)');
+  horizon.addColorStop(1, 'rgba(80,160,255,0)');
+  ctx.fillStyle = horizon;
+  ctx.fillRect(0, FLOOR_Y - 40, CW, 75);
+
+  // Sweep lines
+  ctx.strokeStyle = 'rgba(120,200,255,0.1)';
+  ctx.lineWidth = 1;
+  for (let y = 0; y < FLOOR_Y; y += 24) {
+    ctx.beginPath();
+    ctx.moveTo(0, y + Math.sin(t * 2 + y * 0.05) * 1.5);
+    ctx.lineTo(CW, y + Math.sin(t * 2 + y * 0.05) * 1.5);
+    ctx.stroke();
+  }
+
+  // Keep stage floor consistent.
+  ctx.fillStyle = C_FLOOR;
+  ctx.fillRect(0, FLOOR_Y, CW, FLOOR_THICK);
+  ctx.strokeStyle = C_FLOOR_LN;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, FLOOR_Y);
+  ctx.lineTo(CW, FLOOR_Y);
+  ctx.stroke();
+}
+
+function drawLoadingBackground() {
+  const t = performance.now() * 0.001;
+  const grad = ctx.createLinearGradient(0, 0, 0, CH);
+  grad.addColorStop(0, '#090611');
+  grad.addColorStop(0.6, '#120d1f');
+  grad.addColorStop(1, '#080b15');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, CW, CH);
+
+  // Rotating ring scanner behind countdown text.
+  ctx.save();
+  ctx.translate(CW * 0.5, CH * 0.42);
+  ctx.rotate(t * 0.65);
+  for (let i = 0; i < 6; i++) {
+    ctx.rotate(Math.PI / 3);
+    ctx.strokeStyle = `rgba(255,80,180,${0.08 + i * 0.02})`;
+    ctx.lineWidth = 5 - i * 0.6;
+    ctx.beginPath();
+    ctx.arc(0, 0, 70 + i * 16, -0.75, -0.15);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Vertical loading beams
+  for (let i = 0; i < 10; i++) {
+    const x = (i + 1) * (CW / 11);
+    const pulse = 0.15 + 0.12 * Math.sin(t * 3 + i);
+    ctx.fillStyle = `rgba(120,90,255,${pulse})`;
+    ctx.fillRect(x - 2, 0, 4, FLOOR_Y);
+  }
+
+  ctx.fillStyle = C_FLOOR;
+  ctx.fillRect(0, FLOOR_Y, CW, FLOOR_THICK);
+  ctx.strokeStyle = C_FLOOR_LN;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, FLOOR_Y);
+  ctx.lineTo(CW, FLOOR_Y);
+  ctx.stroke();
+}
+
+function drawFightBackground() {
+  const t = performance.now() * 0.001;
+  const sky = ctx.createLinearGradient(0, 0, 0, FLOOR_Y);
+  sky.addColorStop(0, '#060b18');
+  sky.addColorStop(0.55, '#0a1530');
+  sky.addColorStop(1, '#0f1f34');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, CW, FLOOR_Y);
+
+  // Arena depth lines
+  ctx.strokeStyle = 'rgba(80,150,220,0.14)';
+  ctx.lineWidth = 1;
+  const horizonY = FLOOR_Y * 0.38;
+  for (let x = -CW; x <= CW * 2; x += 45) {
+    ctx.beginPath();
+    ctx.moveTo(CW * 0.5, horizonY);
+    ctx.lineTo(x + Math.sin(t + x * 0.01) * 8, FLOOR_Y);
+    ctx.stroke();
+  }
+
+  // Horizontal bands
+  ctx.strokeStyle = 'rgba(80,180,255,0.09)';
+  for (let y = horizonY; y < FLOOR_Y; y += 24) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(CW, y);
+    ctx.stroke();
+  }
+
+  // Side light columns
+  for (const side of [0.1, 0.9]) {
+    const x = CW * side;
+    const pulse = 0.18 + 0.12 * Math.sin(t * 3 + side * 5);
+    const glow = ctx.createRadialGradient(x, FLOOR_Y - 110, 8, x, FLOOR_Y - 110, 120);
+    glow.addColorStop(0, `rgba(70,220,255,${pulse})`);
+    glow.addColorStop(1, 'rgba(70,220,255,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(x - 120, FLOOR_Y - 230, 240, 240);
+  }
+
+  // Floor
+  ctx.fillStyle = C_FLOOR;
+  ctx.fillRect(0, FLOOR_Y, CW, FLOOR_THICK);
+  ctx.strokeStyle = C_FLOOR_LN;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, FLOOR_Y);
+  ctx.lineTo(CW, FLOOR_Y);
+  ctx.stroke();
+
+  // Floor grid
+  ctx.strokeStyle = 'rgba(70,140,90,0.32)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < CW; x += 40) {
+    ctx.beginPath();
+    ctx.moveTo(x, FLOOR_Y);
+    ctx.lineTo(x, FLOOR_Y + FLOOR_THICK);
+    ctx.stroke();
+  }
+}
+
 function drawPlayer(p) {
   const now = performance.now();
   const r   = playerRect(p);
+  const spriteName = getPlayerSpriteName(p);
+  const sprite = getSpriteImage(p.charId, spriteName);
 
   ctx.save();
 
@@ -418,20 +632,32 @@ function drawPlayer(p) {
     yOff = Math.sin(frameCount * 0.25) * 2;
   }
 
-  // Main body rectangle
-  ctx.fillStyle = col;
-  ctx.fillRect(r.x, r.y + yOff, r.w, r.h);
+  // Prefer sprite draw, fallback to rectangle body if not loaded yet
+  if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+    if (!p.facingRight) {
+      // Isolate flip transform so later FX/hitbox draws stay in world coordinates.
+      ctx.save();
+      ctx.translate(r.x + r.w, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(sprite, 0, r.y + yOff, r.w, r.h);
+      ctx.restore();
+    } else {
+      ctx.drawImage(sprite, r.x, r.y + yOff, r.w, r.h);
+    }
+  } else {
+    ctx.fillStyle = col;
+    ctx.fillRect(r.x, r.y + yOff, r.w, r.h);
+    ctx.shadowBlur = 0;
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(r.x + 0.5, r.y + yOff + 0.5, r.w - 1, r.h - 1);
+
+    const eyeX = p.facingRight ? r.x + r.w - 5 : r.x + 4;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(eyeX, r.y + yOff + 6, 3, 3);
+  }
   ctx.shadowBlur = 0;
-
-  // White outline
-  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(r.x + 0.5, r.y + yOff + 0.5, r.w - 1, r.h - 1);
-
-  // Eye dot (indicates facing direction)
-  const eyeX = p.facingRight ? r.x + r.w - 5 : r.x + 4;
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(eyeX, r.y + yOff + 6, 3, 3);
 
   // Block shield visual
   if (p.action === 'block') {
@@ -447,11 +673,27 @@ function drawPlayer(p) {
   if (p.attackActive) {
     const atk = attackRect(p);
     if (atk) {
+      let drawAtk = atk;
+      // Visual-only tweak: keep gameplay hitbox untouched, align Citron heavy FX to sprite.
+      if (p.charId === 'citron' && p.currentAtk === 2) {
+        const w = Math.floor(HEAVY_RANGE * 0.78);
+        drawAtk = {
+          // Anchor from body rect to keep left/right placement consistent.
+          x: p.facingRight ? r.x + r.w : r.x - w,
+          y: r.y + 16,
+          w,
+          h: PLAYER_H - 26,
+        };
+      }
+      // Force world-space draw so hitbox FX cannot inherit sprite flip transforms.
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle   = (p.currentAtk === 2) ? 'rgba(255,120,0,0.25)' : 'rgba(100,180,255,0.2)';
-      ctx.fillRect(atk.x, atk.y, atk.w, atk.h);
+      ctx.fillRect(drawAtk.x, drawAtk.y, drawAtk.w, drawAtk.h);
       ctx.strokeStyle = (p.currentAtk === 2) ? 'rgba(255,140,0,0.7)' : 'rgba(100,200,255,0.6)';
       ctx.lineWidth   = 1.5;
-      ctx.strokeRect(atk.x, atk.y, atk.w, atk.h);
+      ctx.strokeRect(drawAtk.x, drawAtk.y, drawAtk.w, drawAtk.h);
+      ctx.restore();
     }
   }
 
@@ -467,12 +709,14 @@ function drawPlayer(p) {
 
 function drawMenuArt() {
   // Ghosted fighter silhouettes on the menu screen
+  const c1 = CHARACTERS[menuSel[1]] || { color: C_P1 };
+  const c2 = CHARACTERS[menuSel[2]] || { color: C_P2 };
   const t = performance.now() / 1000;
   ctx.save();
   ctx.globalAlpha = 0.12 + 0.04 * Math.sin(t);
-  ctx.fillStyle   = C_P1;
+  ctx.fillStyle   = c1.color;
   ctx.fillRect(CW * 0.25 - 20, FLOOR_Y - PLAYER_H - 4, PLAYER_W + 8, PLAYER_H + 4);
-  ctx.fillStyle   = C_P2;
+  ctx.fillStyle   = c2.color;
   ctx.fillRect(CW * 0.70 - 20, FLOOR_Y - PLAYER_H - 4, PLAYER_W + 8, PLAYER_H + 4);
   ctx.globalAlpha = 1;
   ctx.restore();
@@ -503,7 +747,10 @@ function updateHUD() {
 // ============================================================================
 function showOverlay(title, sub, btnText) {
   document.getElementById('overlay').classList.remove('hidden');
-  document.getElementById('overlay-title').textContent  = title;
+  const titleEl = document.getElementById('overlay-title');
+  titleEl.textContent  = title;
+  titleEl.style.fontSize = '';
+  titleEl.style.letterSpacing = '';
   document.getElementById('overlay-sub').innerHTML      = sub;
   const btn = document.getElementById('overlay-btn');
   btn.textContent  = btnText;
@@ -518,6 +765,13 @@ function showCountdownText(txt, color) {
   const el = document.getElementById('countdown-text');
   el.textContent  = txt;
   el.style.color  = color || C_WHITE;
+  if (txt.startsWith('ROUND ')) {
+    el.style.fontSize = 'clamp(44px, 12vw, 84px)';
+  } else if (txt === 'FIGHT!') {
+    el.style.fontSize = 'clamp(64px, 17vw, 126px)';
+  } else {
+    el.style.fontSize = 'clamp(60px, 18vw, 140px)';
+  }
   el.style.display = 'block';
   // Re-trigger CSS animation
   el.style.animation = 'none';
@@ -529,6 +783,132 @@ function hideCountdownText() {
   document.getElementById('countdown-text').style.display = 'none';
 }
 
+function ensurePlayers() {
+  const px1 = CW * 0.2, px2 = CW * 0.75;
+  if (!p1) {
+    p1 = makePlayer(px1, START_Y, true,  C_P1, C_P1_ATK);
+    p2 = makePlayer(px2, START_Y, false, C_P2, C_P2_ATK);
+  } else {
+    p1.roundWins = 0;
+    p2.roundWins = 0;
+    resetPlayerForRound(p1, px1, START_Y, true);
+    resetPlayerForRound(p2, px2, START_Y, false);
+  }
+}
+
+function renderCharacterSelectOverlay() {
+  const p1Char = CHARACTERS[menuSel[1]];
+  const p2Char = CHARACTERS[menuSel[2]];
+  const p1Name = p1Char.name;
+  const p2Name = p2Char.name;
+  const p1Status = menuLock[1] ? 'LOCKED' : 'SELECTING';
+  const p2Status = menuLock[2] ? 'LOCKED' : 'SELECTING';
+  const cards = CHARACTERS.map((ch, idx) => {
+    const isP1 = menuSel[1] === idx;
+    const isP2 = menuSel[2] === idx;
+    const p1Tag = isP1 ? (menuLock[1] ? 'P1 LOCKED' : 'P1 READY') : '';
+    const p2Tag = isP2 ? (menuLock[2] ? 'P2 LOCKED' : 'P2 READY') : '';
+    const ring = isP1 && isP2
+      ? '0 0 0 2px #2266ff, 0 0 0 5px #ff2222, 0 0 18px rgba(255,255,255,0.25)'
+      : isP1
+        ? '0 0 0 2px #2266ff, 0 0 14px rgba(34,102,255,0.45)'
+        : isP2
+          ? '0 0 0 2px #ff2222, 0 0 14px rgba(255,34,34,0.45)'
+          : '0 0 0 1px rgba(255,255,255,0.14)';
+    return (
+      `<div style="` +
+      `width:min(180px,22vw);min-width:120px;padding:10px 10px 8px;border-radius:9px;` +
+      `background:linear-gradient(160deg,rgba(12,22,36,0.96),rgba(7,12,20,0.96));` +
+      `box-shadow:${ring};position:relative;">` +
+      `<div style="height:72px;border-radius:6px;overflow:hidden;position:relative;` +
+      `background:linear-gradient(140deg,${ch.color},${ch.atkColor});">` +
+      `<img src="assets/fighters/${ch.spriteId}/idle.png" alt="${ch.name}" ` +
+      `style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.5));">` +
+      `<div style="position:absolute;left:0;right:0;bottom:4px;text-align:center;` +
+      `font-family:'Press Start 2P',monospace;letter-spacing:1px;font-size:8px;color:#f4f8ff;">${ch.portrait}</div>` +
+      `</div>` +
+      `<div style="margin-top:8px;font-family:'Press Start 2P',monospace;font-size:13px;` +
+      `letter-spacing:1px;color:${ch.color};text-shadow:1px 1px 0 #000;">${ch.name}</div>` +
+      `<div style="margin-top:6px;display:flex;gap:6px;justify-content:center;min-height:20px;">` +
+      (p1Tag ? `<span style="padding:2px 6px;border-radius:4px;background:rgba(34,102,255,0.2);color:#8eb8ff;font-size:10px;letter-spacing:1px;">${p1Tag}</span>` : '') +
+      (p2Tag ? `<span style="padding:2px 6px;border-radius:4px;background:rgba(255,34,34,0.2);color:#ffabab;font-size:10px;letter-spacing:1px;">${p2Tag}</span>` : '') +
+      `</div>` +
+      `</div>`
+    );
+  }).join('');
+
+  const titleEl = document.getElementById('overlay-title');
+  titleEl.textContent = 'CHARACTER SELECT';
+  titleEl.style.fontSize = 'clamp(24px, 5vw, 42px)';
+  titleEl.style.letterSpacing = '4px';
+  document.getElementById('overlay-sub').innerHTML =
+    `<div style="max-width:min(760px,94vw);margin:0 auto;text-align:center;">` +
+    `<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">${cards}</div>` +
+    `<div style="margin-top:12px;font-size:0.95em;letter-spacing:1px;text-align:center;">` +
+    `P1: <span style="color:${p1Char.color}">${p1Name}</span> [${p1Status}] &nbsp;|&nbsp; ` +
+    `P2: <span style="color:${p2Char.color}">${p2Name}</span> [${p2Status}]` +
+    `</div>` +
+    '<div style="margin-top:6px;font-size:0.85em;color:#8899aa;text-align:center;">Move = LEFT/RIGHT | Lock = LIGHT/HEAVY | Unlock = BLOCK</div>' +
+    `</div>`;
+}
+
+function openCharacterSelect() {
+  menuPhase = 'character_select';
+  menuReadyAt = 0;
+  menuSel[1] = 0;
+  menuSel[2] = 1;
+  menuLock[1] = false;
+  menuLock[2] = false;
+  applyMenuCharacters();
+
+  showOverlay('CHARACTER SELECT', '', '▶ WAITING...');
+  const btn = document.getElementById('overlay-btn');
+  btn.style.display = 'none';
+  renderCharacterSelectOverlay();
+}
+
+function menuJustPressed(pl, action) {
+  const now = inp[pl][action];
+  const was = menuPrev[pl][action];
+  menuPrev[pl][action] = now;
+  return now && !was;
+}
+
+function updateMenu() {
+  if (menuPhase !== 'character_select') return;
+
+  for (const pl of [1, 2]) {
+    if (!menuLock[pl]) {
+      if (menuJustPressed(pl, 'left')) {
+        menuSel[pl] = (menuSel[pl] + CHARACTERS.length - 1) % CHARACTERS.length;
+      }
+      if (menuJustPressed(pl, 'right')) {
+        menuSel[pl] = (menuSel[pl] + 1) % CHARACTERS.length;
+      }
+      if (menuJustPressed(pl, 'light') || menuJustPressed(pl, 'heavy')) {
+        menuLock[pl] = true;
+        sndBeep();
+      }
+    } else if (menuJustPressed(pl, 'block')) {
+      menuLock[pl] = false;
+      sndBeep();
+    }
+  }
+
+  applyMenuCharacters();
+  renderCharacterSelectOverlay();
+
+  if (menuLock[1] && menuLock[2]) {
+    if (!menuReadyAt) menuReadyAt = performance.now() + 500;
+    if (performance.now() >= menuReadyAt) {
+      hideOverlay();
+      enterCountdown();
+    }
+  } else {
+    menuReadyAt = 0;
+  }
+}
+
 // ============================================================================
 // STATE MACHINE
 // ============================================================================
@@ -537,19 +917,17 @@ function hideCountdownText() {
 function overlayBtnPressed() {
   ensureAudio();
   sndBeep();
-  if (gameState === STATE.MENU || gameState === STATE.GAME_OVER) {
-    const px1 = CW * 0.2, px2 = CW * 0.75;
-    if (!p1) {
-      p1 = makePlayer(px1, START_Y, true,  C_P1, C_P1_ATK);
-      p2 = makePlayer(px2, START_Y, false, C_P2, C_P2_ATK);
-    } else {
-      p1.roundWins = 0; p2.roundWins = 0;
-      resetPlayerForRound(p1, px1, START_Y, true);
-      resetPlayerForRound(p2, px2, START_Y, false);
-    }
+  if (gameState === STATE.MENU && menuPhase === 'title') {
+    ensurePlayers();
     roundNum = 1;
-    hideOverlay();
-    enterCountdown();
+    updateHUD();
+    openCharacterSelect();
+  } else if (gameState === STATE.GAME_OVER) {
+    gameState = STATE.MENU;
+    ensurePlayers();
+    roundNum = 1;
+    updateHUD();
+    openCharacterSelect();
   }
 }
 
@@ -600,7 +978,7 @@ function enterRoundEnd() {
     const col = (p2.isKO && !p1.isKO) ? C_P1 : C_P2;
     document.getElementById('overlay').classList.remove('hidden');
     document.getElementById('overlay-title').innerHTML =
-      `<span style="color:${C_RED};font-size:1.2em;letter-spacing:16px">K.O.</span>`;
+      `<span style="display:block;width:100%;text-align:center;color:${C_RED};font-size:1.2em;letter-spacing:16px">K.O.</span>`;
     document.getElementById('overlay-sub').innerHTML =
       `<span style="font-family:'Black Han Sans',sans-serif;font-size:1.5em;letter-spacing:4px;color:${col}">${roundEndMsg}</span>`;
     document.getElementById('overlay-btn').style.display = 'none';
@@ -626,11 +1004,12 @@ function updateRoundEnd() {
 
 function enterGameOver() {
   gameState = STATE.GAME_OVER;
+  menuPhase = 'title';
   let winner;
   if      (p1.roundWins >= ROUNDS_TO_WIN) winner = `<span style="color:var(--p1);font-size:1.4em">P1 WINS THE MATCH!</span>`;
   else if (p2.roundWins >= ROUNDS_TO_WIN) winner = `<span style="color:var(--p2);font-size:1.4em">P2 WINS THE MATCH!</span>`;
   else                                    winner = `<span style="color:var(--yellow);font-size:1.4em">IT'S A DRAW!</span>`;
-  showOverlay('GAME OVER', winner + '<br><br>Press Start to play again', '▶ PLAY AGAIN');
+  showOverlay('GAME OVER', winner + '<br><br>Press Light / Heavy to play again', 'PRESS LIGHT / HEAVY');
 }
 
 function updatePlaying() {
@@ -678,24 +1057,39 @@ function updatePlaying() {
 function gameLoop() {
   animId = requestAnimationFrame(gameLoop);
   frameCount++;
+  document.getElementById('hud').style.display = (gameState === STATE.MENU) ? 'none' : 'flex';
 
-  drawBackground();
+  const startInputNow = inp[1].light || inp[1].heavy || inp[2].light || inp[2].heavy;
+  const canUseStartInput = (gameState === STATE.MENU && menuPhase === 'title') || gameState === STATE.GAME_OVER;
+  if (canUseStartInput && startInputNow && !startInputPrev) {
+    overlayBtnPressed();
+  }
+  startInputPrev = startInputNow;
 
   switch (gameState) {
+    case STATE.MENU:
+      drawStartScreenBackground();
+      updateMenu();
+      drawMenuArt();
+      break;
     case STATE.COUNTDOWN:
+      drawFightBackground();
       updateCountdown();
       if (p1) { drawPlayer(p1); drawPlayer(p2); }
       break;
     case STATE.PLAYING:
+      drawFightBackground();
       updatePlaying();
       drawPlayer(p1);
       drawPlayer(p2);
       break;
     case STATE.ROUND_END:
+      drawBackground();
       updateRoundEnd();
       if (p1) { drawPlayer(p1); drawPlayer(p2); }
       break;
-    default:  // MENU / GAME_OVER
+    default:  // GAME_OVER
+      drawStartScreenBackground();
       drawMenuArt();
       break;
   }
@@ -723,8 +1117,8 @@ resizeCanvas();
 // ============================================================================
 showOverlay(
   'TEKKEN MINI',
-  'Two-player arcade fighter<br><span style="color:#8899aa;font-size:0.85em">Keyboard: WASD+FGH &nbsp;|&nbsp; Arrows+JKL</span>',
-  '▶ START GAME'
+  'Two-player arcade fighter',
+  'PRESS LIGHT / HEAVY'
 );
 
 requestAnimationFrame(gameLoop);
