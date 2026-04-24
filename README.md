@@ -21,8 +21,38 @@ tekken-arcade-mini/
 │   └── requirements.txt
 ├── arduino/             # Arduino firmware (future)
 ├── assets/fighters/     # Per-fighter PNGs (`greb`, `splint`, `citron`, `brick`)
+├── index.html           # Web shell: HUD, canvas, overlays, touch controls
+├── game.js              # Game logic, canvas rendering, state machine
+├── style.css            # Layout, arcade UI, responsive styling
 └── docs/                # Design notes and wiring diagrams (future)
 ```
+
+---
+
+## Web version on iPad (HTML, CSS, JavaScript)
+
+The browser build is a static site: **`index.html`** loads **`style.css`** and **`game.js`**, and **`game.js`** loads fighter sprites from **`assets/fighters/<name>/*.png`**. Keep that folder structure intact wherever you host or copy the files.
+
+### Running on iPad
+
+1. **Get the files on the iPad** — Clone or download the repo, or copy at least `index.html`, `game.js`, `style.css`, and the whole `assets/fighters/` tree (via iCloud Drive, AirDrop to Files, etc.).
+2. **Open in Safari** — The most reliable approach is to serve the project over **HTTP** from a computer on the same Wi‑Fi, then open the URL on the iPad:
+   - From the repo root on a Mac/PC: `python3 -m http.server 8000`
+   - On the iPad’s Safari, go to `http://<your-computer-ip>:8000/` and tap **`index.html`**.
+   - This avoids quirks some browsers have with `file://` and mixed local paths.
+3. **Optional: host online** — Push the repo to GitHub and enable **GitHub Pages**, or upload the same file set to any static host; open the site URL in Safari on the iPad.
+4. **Play** — Each player uses a **physical joystick** for movement (including jump and crouch) and **three physical buttons** (light attack, heavy attack, block). Those controls are **wired on a breadboard to the Adafruit Metro** (the RP2040 unit running the Arduino sketch)—not paired over Bluetooth to the iPad. The web UI still uses `touch-action: none` so stray touch gestures do not scroll the page if you use on-screen fallback controls.
+5. **Fullscreen feel** — In Safari, use **Share → Add to Home Screen** to launch the game like a web app.
+
+### What each file does
+
+| File | Role |
+|------|------|
+| `index.html` | Page structure: HUD, canvas, overlay (menu / character select / game over), and touch control markup. |
+| `game.js` | Game loop, input (keyboard + touch), physics, combat, canvas drawing, and DOM updates for overlays and HP. |
+| `style.css` | Fonts, colors, layout, arcade-style UI, and sizing for HUD, canvas frame, and controls. |
+
+Keyboard controls still work on a desktop browser. For cabinet play, **joysticks and three buttons per player** are wired to the **Metro on a breadboard**; on the iPad web build, **on-screen touch** is a fallback when inputs are not coming from that hardware.
 
 ---
 
